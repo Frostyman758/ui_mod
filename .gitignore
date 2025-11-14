@@ -1,0 +1,12 @@
+# Extracted sample archives
+uia/
+uif/
+uigb/
+uilb/
+# Generated artifacts
+*.json
+!ui_tool/data/path_hashes.json
+!ui_tool/data/uigb_strcode_map.json
+*.uilb
+__pycache__/
+*.pyc
