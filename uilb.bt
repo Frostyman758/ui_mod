@@ -1,0 +1,262 @@
+LittleEndian();
+
+#include "common/common.bt"
+
+struct UiLayoutBinaryHeader
+{
+    char Signature[4] <hidden=true>;
+    ubyte magic;
+    Assert(magic == 1);    
+    enum <ubyte> Version
+    {
+        GZ=0,
+        TPP=1,
+    } version;
+    ushort padding <hidden=true>;
+
+    ushort ModelDataCount;
+    ushort AnimDataCount; // sai - (Max: 32)
+    ushort CameraDataCount;
+    ushort LayoutDataCount;
+
+    ushort StrCode32Count;
+    ushort PathCode64Count;
+
+    int ModelDataOffset;
+    int AnimDataOffset;
+    int CameraDataOffset;
+    int LayoutDataOffset;
+
+    int StrCode32sRelativeOffset;
+    int PathCode64sRelativeOffset;
+    int BuffersSectionOffset;
+} Header <bgcolor = 0xECE0F3>;
+
+enum <byte> UiCameraDataFov
+{
+    UI_CAMERA_DATA_FOV_DIAGONAL = 0,
+    UI_CAMERA_DATA_FOV_HORIZONTAL = 1,
+    UI_CAMERA_DATA_FOV_VERTICAL = 2,
+};
+
+typedef enum <uint>
+{
+    UI_INHERITANCE_SETTING_SCALE = 1,
+    UI_INHERITANCE_SETTING_ROTATION = 2,
+    UI_INHERITANCE_SETTING_TRANSLATION = 4,
+    UI_INHERITANCE_SETTING_COLOR_RGB = 8,
+    UI_INHERITANCE_SETTING_COLOR_ALPHA = 16,
+} UiInheritanceSetting <read = ReadUiInheritanceSetting>;
+string ReadUiInheritanceSetting(UiInheritanceSetting flags)
+{
+	local string result = flags == 0 ? "" : "| ";
+	local uint i;
+	local string enumName;
+	local UiInheritanceSetting temp;
+	for (i = 1; i < 32; i = i << 1)
+	{
+		temp = flags & i;
+		enumName = EnumToString(temp);
+		if (enumName != "")
+			result += " " + enumName + " |";
+	}
+
+	return result;
+}
+
+typedef enum <uint>
+{
+    UI_MODEL_DATA_FLAG_DISP_ON = 1,
+    UI_MODEL_DATA_FLAG_ZTEST = 2,
+    UI_MODEL_DATA_FLAG_GAME_CAMERA = 4,
+    UI_MODEL_DATA_FLAG_BILLBOARD = 8,
+    UI_MODEL_DATA_FLAG_STENCIL_MODEL = 16,
+    UI_MODEL_DATA_FLAG_STENCIL_OUT = 32,
+    UI_MODEL_DATA_FLAG_DRAW_STENCIL_OFF = 64,
+    UI_MODEL_DATA_FLAG_TEXTURE_NOWAIT = 128,
+} UiModelDataFlag <read = ReadUiModelDataFlag>;
+string ReadUiModelDataFlag(UiModelDataFlag flags)
+{
+	local string result = flags == 0 ? "" : "| ";
+	local uint i;
+	local string enumName;
+	local UiModelDataFlag temp;
+	for (i = 1; i < 32; i = i << 1)
+	{
+		temp = flags & i;
+		enumName = EnumToString(temp);
+		if (enumName != "")
+			result += " " + enumName + " |";
+	}
+
+	return result;
+}
+
+if (Header.ModelDataCount > 0)
+{
+    FSeek(Header.ModelDataOffset);
+
+    struct UiModelData
+    {
+        // The name is just the StrCode32 hash of the filename.
+        short NameStrCode32Index;
+        short ModelFilePathCode64Index;
+
+        UiModelDataFlag Flags;
+
+        int Priority;
+
+        Vector3W Scale;
+        Quaternion RotationQuaternion;
+        Vector4 Translate;
+        Vector4 Color;
+        
+        float BillboardMin;
+        float BillboardMax;
+
+        short ConnectModelDataStrCode32Index;
+        short ConnectModelNodeStrCode32Index;
+
+        UiInheritanceSetting InheritanceSetting;
+        int AnimDataNameStrCode32IndicesRelativeOffset <hidden = true>;       // Offset from BuffersSectionOffset
+        short AnimDataNameCount <hidden = true>;
+        
+        byte UseLayoutCamera;
+        byte Padding <hidden = true>; Assert(Padding == 0);
+
+        if (AnimDataNameCount > 0)
+        {
+            local int64 position = FTell();
+
+            FSeek(Header.BuffersSectionOffset + AnimDataNameStrCode32IndicesRelativeOffset);
+
+            short AnimDataNameStrCode32Indices[AnimDataNameCount] <bgcolor = 0xCEB7ED>;
+
+            FSeek(position);
+        }
+    } ModelData[Header.ModelDataCount] <optimize = false, bgcolor = 0xE6D5EA>;
+}
+
+if (Header.AnimDataCount > 0)
+{
+    FSeek(Header.AnimDataOffset);
+
+    struct UiAnimData
+    {
+        // The name is just the StrCode32 hash of the filename.
+        short NameStrCode32Index;
+
+        short AnimFile_UI_PathCode64Index;
+        short AnimFile_SHADER_PathCode64Index;
+
+        ushort NodeCount <hidden = true>;
+        int SrcNodeNameStrCode32IndicesRelativeOffset <hidden = true>;
+        int DestNodeNameStrCode32IndicesRelativeOffset <hidden = true>;
+
+        if (NodeCount > 0)
+        {
+            local int64 position = FTell();
+
+            FSeek(Header.BuffersSectionOffset + SrcNodeNameStrCode32IndicesRelativeOffset);
+
+            short SrcNodeNameStrCode32Indices[NodeCount];
+
+            FSeek(Header.BuffersSectionOffset + DestNodeNameStrCode32IndicesRelativeOffset);
+
+            short DestNodeNameStrCode32Indices[NodeCount];
+
+            FSeek(position);
+        }
+
+        float Speed;
+    } AnimData[Header.AnimDataCount] <optimize = false, bgcolor = 0xFCBEF2>;
+}
+
+if (Header.CameraDataCount > 0)
+{
+    FSeek(Header.CameraDataOffset);
+
+    struct UiCameraData
+    {
+        short NameStrCode32Index;
+
+        byte UseOrtho;
+
+        UiCameraDataFov FoVType;
+        
+        float OrthoHeight;
+        float NearClip;
+        float FarClip;
+        float FoV;
+
+        Vector4 Translate;
+        Quaternion RotationQuaternion;
+    } CameraData[Header.CameraDataCount] <bgcolor = 0xE19CCA>;
+}
+
+if (Header.LayoutDataCount > 0)
+{
+    FSeek(Header.LayoutDataOffset);
+
+    struct UiLayoutData
+    {
+        // The name is just the StrCode32 hash of the filename.
+        short NameStrCode32Index;
+        short LayoutFilePathCode64Index;
+
+        int Priority;
+
+        Vector3W Scale;
+        Quaternion RotationQuaterion;
+        Vector4 Translate;
+        Vector4 Color;
+
+        short ConnectModelDataStrCode32Index;
+        short ConnectModelNodeStrCode32Index;
+
+        ubyte Visible;
+        ubyte UseParentCamera;
+
+        short FontTableIndex;
+    } LayoutData[Header.LayoutDataCount] <optimize = true, bgcolor = 0x745F68>;
+}
+
+if (Header.version==GZ)
+{
+    if (Header.PathCode64sRelativeOffset != -1)
+    {
+	    Assert(FTell() == Header.PathCode64sRelativeOffset);
+        struct StringEntry {
+            uint stringSize <hidden=true>;
+            uint stringRelativeOffset <hidden=true>;
+            local int64 continuePosition = FTell();
+            FSeek(Header.BuffersSectionOffset+stringRelativeOffset);
+            char str[stringSize];
+            FSeek(continuePosition);
+        } stringEntry[Header.PathCode64Count] <optimize=false, bgcolor = 0x856ACE, fgcolor = 0xFFFFFF>;
+    }
+}
+
+if (Header.StrCode32sRelativeOffset != -1)
+{
+	FSeek(Header.BuffersSectionOffset + Header.StrCode32sRelativeOffset);
+    if (Header.version==GZ)
+    {
+	    StrCode StrCodes[Header.StrCode32Count] <bgcolor = 0x75A2FA, fgcolor = 0xFFFFFF>;
+    }
+    else if (Header.version==TPP)
+    {
+	    StrCode32 StrCode32s[Header.StrCode32Count] <bgcolor = 0x75A2FA, fgcolor = 0xFFFFFF>;
+    }
+}
+
+FAlign(8);
+
+if (Header.version==TPP)
+{
+    if (Header.PathCode64sRelativeOffset != -1)
+    {
+	    Assert(FTell() == Header.BuffersSectionOffset + Header.PathCode64sRelativeOffset);
+	    PathCode64 PathCode64s[Header.PathCode64Count] <bgcolor = 0x856ACE, fgcolor = 0xFFFFFF>;
+    }
+}
