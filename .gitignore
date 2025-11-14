@@ -1,0 +1,10 @@
+# Extracted sample archives
+uia/
+uif/
+uigb/
+uilb/
+# Generated artifacts
+*.json
+*.uilb
+__pycache__/
+*.pyc
